@@ -17,8 +17,20 @@ from .utils import (
     AverageMeter,
     TrainingLogger,
 )
-from .tokenizer import DiffusionTokenizer
-from .data import TokenizedDataset, StreamingDataset, create_dataloader, load_datasets
+
+# Optional imports (require additional dependencies)
+try:
+    from .tokenizer import DiffusionTokenizer
+except ImportError:
+    DiffusionTokenizer = None  # type: ignore
+
+try:
+    from .data import TokenizedDataset, StreamingDataset, create_dataloader, load_datasets
+except ImportError:
+    TokenizedDataset = None  # type: ignore
+    StreamingDataset = None  # type: ignore
+    create_dataloader = None  # type: ignore
+    load_datasets = None  # type: ignore
 
 __version__ = "0.2.0"
 __all__ = [
@@ -46,9 +58,9 @@ __all__ = [
     "count_parameters",
     "AverageMeter",
     "TrainingLogger",
-    # Tokenizer
+    # Tokenizer (optional)
     "DiffusionTokenizer",
-    # Data
+    # Data (optional)
     "TokenizedDataset",
     "StreamingDataset",
     "create_dataloader",
