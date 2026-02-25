@@ -133,9 +133,24 @@ def print_help():
 
 def main(args):
     """Main interactive chat function."""
-    # Setup device
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f"Loading model on {device}...")
+    # Setup device with CUDA compatibility check
+    device = torch.device('cpu')
+    use_cuda = False
+    if torch.cuda.is_available():
+        try:
+            # Test if CUDA is actually usable by running a computation
+            x = torch.zeros(1).cuda()
+            y = x + x  # This triggers kernel launch
+            y.item()   # Force synchronization
+            device = torch.device('cuda')
+            use_cuda = True
+            print(f"Loading model on cuda...")
+        except Exception as e:
+            print(f"CUDA not usable ({type(e).__name__}), falling back to CPU")
+    
+    if not use_cuda:
+        device = torch.device('cpu')
+        print(f"Loading model on cpu...")
     
     # Load model
     model, model_config, T = load_model(args.checkpoint, device)
