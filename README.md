@@ -86,6 +86,27 @@ python scripts/sample.py \
     --output samples.txt
 ```
 
+### Interactive Chat
+
+```bash
+# Start interactive chat session
+python scripts/chat.py --checkpoint checkpoints/checkpoint_final.pt
+
+# With custom settings
+python scripts/chat.py \
+    --checkpoint checkpoints/checkpoint_final.pt \
+    --max-length 256 \
+    --temperature 0.8 \
+    --progress
+```
+
+In chat mode, use these commands:
+- `/quit` - Exit the chat
+- `/help` - Show help
+- `/temp <value>` - Set temperature (0.1-2.0)
+- `/len <value>` - Set max length (32-512)
+- `/progress` - Toggle progress bar
+
 ### Evaluation
 
 ```bash
