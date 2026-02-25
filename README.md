@@ -1,33 +1,41 @@
 # Discrete Diffusion Language Model
 
-A PyTorch implementation of discrete diffusion for language modeling, following the Mercury/MDLM approach. The model operates by corrupting token sequences with a masking noise process and learning to denoise them.
+A production-ready PyTorch implementation of discrete diffusion for language modeling, following the Mercury/MDLM approach.
 
-## Overview
+## Features
 
-This implementation features:
-- **Absorbing/masking diffusion**: Tokens are independently masked with probability `t/T` at timestep `t`
-- **Transformer denoiser**: AdaLN-based timestep conditioning injected into each transformer layer
-- **MDLM ELBO loss**: Cross-entropy over masked positions with proper weighting
-- **Efficient training**: Mixed precision, gradient clipping, cosine LR with warmup
-- **Complete tooling**: Training, sampling, and evaluation scripts
+- **BPE Tokenization**: Hugging Face tokenizers integration for proper subword tokenization
+- **Model Presets**: Predefined configurations (tiny, small, base, medium, large, xl)
+- **Rotary Embeddings**: Optional RoPE for better length extrapolation
+- **Validation & Early Stopping**: Automatic validation with perplexity tracking
+- **Gradient Accumulation**: Train with larger effective batch sizes
+- **Mixed Precision**: AMP support for faster training on GPU
+- **Experiment Tracking**: WandB and TensorBoard integration
+- **REST API**: FastAPI server for deployment
+- **Production Scripts**: Data preparation, training, sampling, chat, and serving
 
 ## Quick Start
 
 ```bash
-# Clone the repository
+# Clone and setup
 git clone https://github.com/austintechreviews/DiffusionLLMThing.git
 cd DiffusionLLMThing
+./setup.sh --dev
 
-# Setup virtual environment and install dependencies
-./setup.sh              # Core dependencies only
-./setup.sh --dev        # Include development dependencies (pytest, black, ruff)
-./setup.sh --all        # Include all optional dependencies (wandb, tensorboard)
+# Prepare your data
+python scripts/prepare_data.py --input data/raw_text/ --output data/processed
 
-# Activate the virtual environment
-source venv/bin/activate
+# Train a model
+python scripts/train.py --data-dir data/processed --model-preset base
 
-# Or use the run helper
-./run.sh python scripts/train.py --config configs/default.yaml
+# Generate text
+python scripts/sample.py --checkpoint checkpoints/checkpoint_final.pt --num-samples 5
+
+# Chat interactively
+python scripts/chat.py --checkpoint checkpoints/checkpoint_final.pt
+
+# Start API server
+python scripts/server.py --checkpoint checkpoints/checkpoint_final.pt --port 8000
 ```
 
 ## Installation
@@ -35,49 +43,130 @@ source venv/bin/activate
 ### Using setup script (recommended)
 
 ```bash
-./setup.sh --dev    # Recommended for development
+./setup.sh --all    # Install all dependencies
 source venv/bin/activate
 ```
 
 ### Manual installation
 
 ```bash
-# Create virtual environment
 python -m venv venv
 source venv/bin/activate
-
-# Install dependencies
 pip install -r requirements.txt
-
-# Or install as package
-pip install -e ".[all]"
 ```
 
-## Usage
+### Requirements
 
-### Training
+- Python 3.9+
+- PyTorch 2.0+
+- CUDA 7.0+ GPU (recommended for training)
 
-```bash
-# Train with default config
-python scripts/train.py --config configs/default.yaml
+## Data Preparation
 
-# Train with test config (smaller, faster)
-python scripts/train.py --config configs/test.yaml
+### Format your data
 
-# Resume from checkpoint
-python scripts/train.py --config configs/default.yaml --resume checkpoints/checkpoint_step_005000.pt
+Place your text files in a directory:
 
-# Override config from command line
-python scripts/train.py --data-path data/my_data.txt --checkpoint-dir my_checkpoints
+```
+data/raw_text/
+├── book1.txt
+├── book2.txt
+├── articles.jsonl
+└── ...
 ```
 
-### Sampling
+Supported formats:
+- `.txt` - Plain text files
+- `.json` - JSON with "text" field
+- `.jsonl` - JSON lines with "text" field
+
+### Prepare the data
 
 ```bash
-# Generate samples
-python scripts/sample.py --checkpoint checkpoints/checkpoint_final.pt
+python scripts/prepare_data.py \
+    --input data/raw_text/ \
+    --output data/processed \
+    --vocab-size 32000 \
+    --min-frequency 2
+```
 
-# Generate more samples with custom parameters
+This will:
+1. Train a BPE tokenizer on your data
+2. Split into train/val/test (90/5/5)
+3. Tokenize all splits
+4. Save metadata
+
+Output:
+```
+data/processed/
+├── tokenizer.json      # BPE tokenizer
+├── train.jsonl         # Tokenized training data
+├── val.jsonl           # Tokenized validation data
+├── test.jsonl          # Tokenized test data
+└── metadata.json       # Dataset statistics
+```
+
+## Training
+
+### Basic training
+
+```bash
+python scripts/train.py \
+    --data-dir data/processed \
+    --model-preset base \
+    --batch-size 32 \
+    --max-steps 100000
+```
+
+### Model presets
+
+| Preset  | Params | Hidden | Layers | Heads | Max Len |
+|---------|--------|--------|--------|-------|---------|
+| tiny    | ~5M    | 128    | 2      | 4     | 256     |
+| small   | ~20M   | 256    | 4      | 8     | 512     |
+| base    | ~85M   | 512    | 6      | 8     | 512     |
+| medium  | ~200M  | 768    | 12     | 12    | 1024    |
+| large   | ~400M  | 1024   | 16     | 16    | 1024    |
+| xl      | ~1.5B  | 2048   | 24     | 16    | 2048    |
+
+### Advanced options
+
+```bash
+python scripts/train.py \
+    --data-dir data/processed \
+    --model-preset base \
+    --batch-size 16 \
+    --grad-accum 4 \          # Effective batch: 16*4=64
+    --lr 3e-4 \
+    --warmup-steps 2000 \
+    --max-steps 100000 \
+    --val-every 1000 \
+    --early-stopping \
+    --early-stopping-patience 5 \
+    --use-rotary-embeddings \
+    --use-wandb \
+    --checkpoint-dir checkpoints/my_experiment
+```
+
+### Resuming training
+
+```bash
+python scripts/train.py \
+    --data-dir data/processed \
+    --resume checkpoints/checkpoint_step_005000.pt
+```
+
+### Test mode
+
+```bash
+python scripts/train.py --test  # Tiny model, 100 steps
+```
+
+## Generation
+
+### Sample generation
+
+```bash
 python scripts/sample.py \
     --checkpoint checkpoints/checkpoint_final.pt \
     --num-samples 10 \
@@ -86,175 +175,163 @@ python scripts/sample.py \
     --output samples.txt
 ```
 
-### Interactive Chat
+### Interactive chat
 
 ```bash
-# Start interactive chat session
 python scripts/chat.py --checkpoint checkpoints/checkpoint_final.pt
 
-# With custom settings
-python scripts/chat.py \
-    --checkpoint checkpoints/checkpoint_final.pt \
-    --max-length 256 \
-    --temperature 0.8 \
-    --progress
+# In chat:
+/len 256        # Set max length
+/temp 0.7       # Set temperature
+/progress       # Toggle progress bar
 ```
 
-In chat mode, use these commands:
-- `/quit` - Exit the chat
-- `/help` - Show help
-- `/temp <value>` - Set temperature (0.1-2.0)
-- `/len <value>` - Set max length (32-512)
-- `/progress` - Toggle progress bar
-
-### Evaluation
+### API Server
 
 ```bash
-# Evaluate on test set
-python scripts/evaluate.py \
+# Start server
+python scripts/server.py \
     --checkpoint checkpoints/checkpoint_final.pt \
-    --data-path data/test.txt
+    --port 8000
 
-# Evaluate at different timesteps
-python scripts/evaluate.py \
-    --checkpoint checkpoints/checkpoint_final.pt \
-    --data-path data/test.txt \
-    --eval-timesteps
+# Query API
+curl -X POST http://localhost:8000/generate \
+    -H "Content-Type: application/json" \
+    -d '{"prompt": "Once upon a time", "max_length": 128, "temperature": 0.8}'
+```
+
+#### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check |
+| `/model` | GET | Model information |
+| `/generate` | POST | Generate text |
+| `/load` | POST | Load checkpoint |
+
+#### Example API request
+
+```python
+import requests
+
+response = requests.post(
+    "http://localhost:8000/generate",
+    json={
+        "prompt": "The future of AI",
+        "max_length": 128,
+        "temperature": 0.8,
+        "num_sequences": 3,
+    }
+)
+
+print(response.json()["generations"])
 ```
 
 ## Configuration
 
-Edit `configs/default.yaml` to customize:
+### YAML config file
 
 ```yaml
-# Diffusion process
-T: 1000  # Number of diffusion steps
-
-# Model architecture
-vocab_size: 32000
-hidden_dim: 512
-num_layers: 6
-num_heads: 8
-
-# Training
-lr: 0.0003
+# configs/my_config.yaml
+model_preset: base
+data_dir: data/processed
 batch_size: 32
-seq_len: 128
-warmup_steps: 2000
+lr: 0.0003
 max_steps: 100000
+warmup_steps: 2000
+T: 1000
+use_rotary_embeddings: true
+use_amp: true
+```
+
+```bash
+python scripts/train.py --config configs/my_config.yaml
 ```
 
 ## Project Structure
 
 ```
 DiffusionLLMThing/
-├── configs/
-│   ├── default.yaml      # Default training config
-│   └── test.yaml         # Small config for testing
-├── diffusionllm/
+├── diffusionllm/           # Core package
 │   ├── __init__.py
-│   ├── model.py          # Transformer architecture
-│   ├── diffusion.py      # Diffusion process functions
-│   ├── sampling.py       # Generation/inference
-│   └── utils.py          # Checkpointing, logging, etc.
+│   ├── config.py          # Model presets
+│   ├── model.py           # Transformer architecture
+│   ├── diffusion.py       # Diffusion functions
+│   ├── sampling.py        # Generation
+│   ├── tokenizer.py       # BPE tokenizer wrapper
+│   ├── data.py            # Datasets
+│   └── utils.py           # Utilities
 ├── scripts/
-│   ├── train.py          # Training entry point
-│   ├── sample.py         # Sampling entry point
-│   └── evaluate.py       # Evaluation entry point
+│   ├── prepare_data.py    # Data preprocessing
+│   ├── train.py           # Training
+│   ├── sample.py          # Batch sampling
+│   ├── chat.py            # Interactive chat
+│   └── server.py          # FastAPI server
+├── configs/
+│   ├── default.yaml
+│   └── test.yaml
 ├── tests/
-│   ├── test_diffusion.py
-│   ├── test_model.py
-│   ├── test_sampling.py
-│   ├── test_training.py
-│   └── test_utils.py
-├── setup.sh              # Setup script
-├── run.sh                # Run helper script
-├── pyproject.toml
-├── requirements.txt
-└── README.md
-```
-
-## Running Tests
-
-```bash
-# Activate venv first
-source venv/bin/activate
-
-# Run all tests
-pytest tests/ -v
-
-# Run specific test file
-pytest tests/test_diffusion.py -v
-
-# Run with coverage
-pytest tests/ --cov=diffusionllm --cov-report=html
+├── setup.sh
+├── run.sh
+└── requirements.txt
 ```
 
 ## API Usage
 
 ```python
-import torch
 from diffusionllm import (
+    get_model_config,
     DiscreteDiffusionTransformer,
-    ModelConfig,
+    DiffusionTokenizer,
     forward_diffusion,
     sample,
+    load_datasets,
 )
 
-# Create model
-config = ModelConfig(
-    vocab_size=32000,
-    hidden_dim=512,
-    num_layers=6,
-    num_heads=8,
-)
+# Load config and create model
+config = get_model_config("base")
 model = DiscreteDiffusionTransformer(config)
 
-# Forward diffusion (corrupt data)
-x0 = torch.randint(3, 32000, (4, 128))  # Clean tokens
-t = torch.randint(0, 1000, (4,))        # Timesteps
-xt, mask = forward_diffusion(x0, t, T=1000, mask_token_id=0)
+# Load tokenizer
+tokenizer = DiffusionTokenizer.load("data/processed/tokenizer.json")
 
-# Denoise
-logits = model(xt, t)
+# Encode text
+ids = tokenizer.encode("Hello, world!", add_bos=True, add_eos=True)
 
-# Generate samples
+# Generate
 generated = sample(
-    model, 
-    T=1000, 
-    mask_token_id=0,
-    batch_size=4, 
-    seq_len=128
+    model=model,
+    T=1000,
+    mask_token_id=tokenizer.mask_token_id,
+    batch_size=1,
+    seq_len=128,
+    temperature=0.8,
 )
+
+# Decode
+text = tokenizer.decode(generated[0].tolist(), skip_special_tokens=True)
 ```
 
-## Algorithm Details
+## Algorithm
 
 ### Forward Diffusion
 
-At timestep `t`, each non-padding token is independently masked with probability `t/T`:
-
+At timestep `t`, each token is masked with probability `t/T`:
 ```
-q(x_t | x_0) = ∏_i Bernoulli(mask_i | t/T)
+q(x_t | x_0) = ∏ Bernoulli(masked | t/T)
 ```
 
 ### Loss Function
 
-The MDLM ELBO-style loss weights each timestep by `1/α_t` where `α_t = 1 - t/T`:
-
+ELBO-weighted cross-entropy:
 ```
-L = E_t[1/α_t * E_q(x_t|x_0)[CE(model(x_t, t), x_0) over masked positions]]
+L = E_t[1/α_t × CE(model(x_t, t), x_0)]
 ```
+where `α_t = 1 - t/T`
 
 ### Sampling
 
-Generation starts from a fully masked sequence and iteratively denoises from `t=T-1` to `t=0`, sampling tokens at masked positions based on model predictions.
-
-## Requirements
-
-- Python 3.9+
-- PyTorch 2.0+
-- CUDA GPU (recommended for training)
+Iterative denoising from `t=T-1` to `t=0`, progressively unmasking tokens.
 
 ## License
 

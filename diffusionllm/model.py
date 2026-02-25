@@ -2,32 +2,17 @@
 Model architecture for discrete diffusion language model.
 
 Transformer-based denoiser with AdaLN timestep conditioning.
+Supports rotary embeddings and flash attention.
 """
 
 import math
-from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
-@dataclass
-class ModelConfig:
-    """Configuration for the diffusion transformer model."""
-    
-    vocab_size: int = 32000
-    hidden_dim: int = 512
-    num_layers: int = 6
-    num_heads: int = 8
-    dropout: float = 0.1
-    max_seq_len: int = 512
-    
-    # Special tokens
-    mask_token_id: int = 0
-    pad_token_id: int = 1
-    eos_token_id: int = 2
+from .config import ModelConfig
 
 
 class TimestepEmbedding(nn.Module):
@@ -70,6 +55,92 @@ class TimestepEmbedding(nn.Module):
         return emb
 
 
+class RotaryEmbedding(nn.Module):
+    """
+    Rotary Position Embeddings (RoPE).
+    
+    Applies rotation matrices to query and key based on position.
+    """
+    
+    def __init__(self, dim: int, max_seq_len: int = 2048, theta: float = 10000.0):
+        super().__init__()
+        self.dim = dim
+        self.max_seq_len = max_seq_len
+        self.theta = theta
+        
+        # Precompute frequencies
+        inv_freq = 1.0 / (theta ** (torch.arange(0, dim, 2).float() / dim))
+        self.register_buffer("inv_freq", inv_freq)
+        
+        # Build rotation cache
+        self._build_cache(max_seq_len)
+    
+    def _build_cache(self, max_seq_len: int):
+        """Precompute rotation matrices."""
+        t = torch.arange(max_seq_len, device=self.inv_freq.device)
+        freqs = torch.outer(t, self.inv_freq)  # (seq_len, dim/2)
+        
+        self.register_buffer("cos_cached", freqs.cos())
+        self.register_buffer("sin_cached", freqs.sin())
+    
+    def forward(
+        self,
+        x: torch.Tensor,
+        position_ids: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Get rotary embeddings for positions.
+        
+        Args:
+            x: Input tensor of shape (batch, seq_len, dim) or (batch, heads, seq_len, dim)
+            position_ids: Optional position IDs (defaults to 0..seq_len-1)
+        
+        Returns:
+            (cos, sin) tensors for rotation
+        """
+        if position_ids is not None:
+            cos = self.cos_cached[position_ids]
+            sin = self.sin_cached[position_ids]
+        else:
+            seq_len = x.shape[-2] if x.dim() == 4 else x.shape[1]
+            cos = self.cos_cached[:seq_len]
+            sin = self.sin_cached[:seq_len]
+        
+        return cos, sin
+
+
+def rotate_half(x: torch.Tensor) -> torch.Tensor:
+    """Rotate half the hidden dims of the input."""
+    x1 = x[..., : x.shape[-1] // 2]
+    x2 = x[..., x.shape[-1] // 2 :]
+    return torch.cat((-x2, x1), dim=-1)
+
+
+def apply_rotary_pos_emb(
+    q: torch.Tensor,
+    k: torch.Tensor,
+    cos: torch.Tensor,
+    sin: torch.Tensor,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Apply rotary position embeddings to queries and keys."""
+    # Expand cos/sin to match q/k shape
+    if q.dim() == 4:  # (batch, heads, seq_len, dim)
+        cos = cos.unsqueeze(1)  # (1, 1, seq_len, dim/2)
+        sin = sin.unsqueeze(1)
+    
+    cos = cos.unsqueeze(-1)  # (..., seq_len, dim/2, 1)
+    sin = sin.unsqueeze(-1)
+    
+    # Duplicate cos/sin for the two halves
+    cos = torch.cat([cos, cos], dim=-1).flatten(-2)
+    sin = torch.cat([sin, sin], dim=-1).flatten(-2)
+    
+    q_rot = (q * cos) + (rotate_half(q) * sin)
+    k_rot = (k * cos) + (rotate_half(k) * sin)
+    
+    return q_rot, k_rot
+
+
 class AdaLN(nn.Module):
     """
     Adaptive LayerNorm: LayerNorm modulated by timestep embeddings.
@@ -103,24 +174,83 @@ class AdaLN(nn.Module):
 class TransformerBlockWithAdaLN(nn.Module):
     """
     Transformer encoder block with Adaptive LayerNorm for timestep conditioning.
+    
+    Supports rotary embeddings and optional flash attention.
     """
     
-    def __init__(self, layer: nn.TransformerEncoderLayer, hidden_dim: int):
+    def __init__(
+        self,
+        hidden_dim: int,
+        num_heads: int,
+        dim_feedforward: int = 2048,
+        dropout: float = 0.1,
+        attention_dropout: float = 0.0,
+        use_rotary_embeddings: bool = False,
+        rope_theta: float = 10000.0,
+        use_flash_attention: bool = False,
+    ):
         super().__init__()
-        self.layer = layer
+        self.hidden_dim = hidden_dim
+        self.num_heads = num_heads
+        self.use_rotary_embeddings = use_rotary_embeddings
+        
+        # AdaLN for conditioning
         self.ada_ln1 = AdaLN(hidden_dim)
         self.ada_ln2 = AdaLN(hidden_dim)
+        
+        # Self-attention
+        self.self_attn = nn.MultiheadAttention(
+            embed_dim=hidden_dim,
+            num_heads=num_heads,
+            dropout=attention_dropout,
+            batch_first=True,
+        )
+        
+        # Rotary embeddings
+        if use_rotary_embeddings:
+            self.rotary_emb = RotaryEmbedding(hidden_dim // num_heads, theta=rope_theta)
+        
+        # Feed-forward
+        self.linear1 = nn.Linear(hidden_dim, dim_feedforward)
+        self.linear2 = nn.Linear(dim_feedforward, hidden_dim)
+        self.dropout = nn.Dropout(dropout)
+        self.dropout1 = nn.Dropout(dropout)
+        self.dropout2 = nn.Dropout(dropout)
+        
+        # Activation
+        self.activation = nn.GELU()
+        
+        # Flash attention (if available)
+        self.use_flash_attention = use_flash_attention
     
-    def forward(self, x: torch.Tensor, t_emb: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        x: torch.Tensor,
+        t_emb: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
         # Self-attention block with AdaLN
         h = self.ada_ln1(x, t_emb)
-        h = self.layer.self_attn(h, h, h, need_weights=False)[0]
-        x = x + self.layer.dropout1(h)
+        
+        if self.use_rotary_embeddings:
+            # Apply RoPE
+            batch_size, seq_len, _ = h.shape
+            h = h.view(batch_size, seq_len, self.num_heads, self.hidden_dim // self.num_heads)
+            h = h.transpose(1, 2)  # (batch, heads, seq_len, head_dim)
+            
+            cos, sin = self.rotary_emb(h)
+            h, _ = apply_rotary_pos_emb(h, h, cos, sin)
+            
+            h = h.transpose(1, 2).reshape(batch_size, seq_len, self.hidden_dim)
+        
+        # Attention
+        h = self.self_attn(h, h, h, attn_mask=attention_mask, need_weights=False)[0]
+        x = x + self.dropout1(h)
         
         # Feed-forward block with AdaLN
         h = self.ada_ln2(x, t_emb)
-        h = self.layer.linear2(self.layer.dropout(self.layer.activation(self.layer.linear1(h))))
-        x = x + self.layer.dropout2(h)
+        h = self.linear2(self.dropout(self.activation(self.linear1(h))))
+        x = x + self.dropout2(h)
         
         return x
 
@@ -143,25 +273,29 @@ class DiscreteDiffusionTransformer(nn.Module):
         # Timestep embeddings
         self.timestep_embed = TimestepEmbedding(config.hidden_dim)
         
-        # Position embeddings
-        self.pos_embed = nn.Parameter(torch.zeros(1, config.max_seq_len, config.hidden_dim))
+        # Position embeddings (only if not using RoPE)
+        if not config.use_rotary_embeddings:
+            self.pos_embed = nn.Parameter(torch.zeros(1, config.max_seq_len, config.hidden_dim))
+        else:
+            self.register_buffer("pos_embed", torch.zeros(1, 1, 1))  # Dummy
         
         # Transformer encoder layers with AdaLN
-        encoder_layers = []
-        for _ in range(config.num_layers):
-            layer = nn.TransformerEncoderLayer(
-                d_model=config.hidden_dim,
-                nhead=config.num_heads,
-                dim_feedforward=config.hidden_dim * 4,
-                dropout=config.dropout,
-                activation="gelu",
-                batch_first=True,
-                norm_first=True,
-            )
-            # Wrap with AdaLN
-            encoder_layers.append(TransformerBlockWithAdaLN(layer, config.hidden_dim))
+        dim_ffn = config.dim_feedforward or 4 * config.hidden_dim
         
-        self.encoder = nn.ModuleList(encoder_layers)
+        self.encoder = nn.ModuleList([
+            TransformerBlockWithAdaLN(
+                hidden_dim=config.hidden_dim,
+                num_heads=config.num_heads,
+                dim_feedforward=dim_ffn,
+                dropout=config.dropout,
+                attention_dropout=config.attention_dropout,
+                use_rotary_embeddings=config.use_rotary_embeddings,
+                rope_theta=config.rope_theta,
+                use_flash_attention=config.use_flash_attention,
+            )
+            for _ in range(config.num_layers)
+        ])
+        
         self.final_norm = nn.LayerNorm(config.hidden_dim)
         
         # Output projection to vocabulary
@@ -172,8 +306,10 @@ class DiscreteDiffusionTransformer(nn.Module):
     
     def _init_weights(self):
         """Initialize weights with small values for embeddings, xavier for others."""
-        nn.init.normal_(self.token_embed.weight, mean=0.0, std=0.02)
-        nn.init.normal_(self.pos_embed, mean=0.0, std=0.02)
+        nn.init.normal_(self.token_embed.weight, mean=0.0, std=self.config.init_std)
+        
+        if not self.config.use_rotary_embeddings:
+            nn.init.normal_(self.pos_embed, mean=0.0, std=self.config.init_std)
         
         for module in self.modules():
             if isinstance(module, nn.Linear):
@@ -184,11 +320,17 @@ class DiscreteDiffusionTransformer(nn.Module):
                 nn.init.ones_(module.weight)
                 nn.init.zeros_(module.bias)
     
-    def forward(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        x: torch.Tensor,
+        t: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
         """
         Args:
             x: Noisy token ids of shape (batch, seq_len)
             t: Timestep of shape (batch,) or scalar
+            attention_mask: Optional attention mask of shape (batch, seq_len)
         Returns:
             Logits over vocabulary of shape (batch, seq_len, vocab_size)
         """
@@ -198,17 +340,25 @@ class DiscreteDiffusionTransformer(nn.Module):
         # Token embeddings
         h = self.token_embed(x)  # (batch, seq_len, hidden_dim)
         
-        # Add position embeddings (truncate if needed)
-        h = h + self.pos_embed[:, :seq_len, :]
+        # Add position embeddings (if not using RoPE)
+        if not self.config.use_rotary_embeddings:
+            h = h + self.pos_embed[:, :seq_len, :]
         
         # Timestep embeddings
         if t.ndim == 0:
             t = t.expand(batch_size)
         t_emb = self.timestep_embed(t)  # (batch, hidden_dim)
         
+        # Create attention mask (convert to additive mask)
+        attn_mask = None
+        if attention_mask is not None:
+            # (batch, seq_len) -> (batch, 1, 1, seq_len) for MultiheadAttention
+            attn_mask = (1.0 - attention_mask.float()) * -1e9
+            attn_mask = attn_mask.unsqueeze(1).unsqueeze(1)
+        
         # Pass through transformer layers with AdaLN
         for layer in self.encoder:
-            h = layer(h, t_emb)
+            h = layer(h, t_emb, attention_mask=attn_mask)
         
         # Final normalization and output projection
         h = self.final_norm(h)

@@ -60,6 +60,9 @@ Issues = "https://github.com/yourusername/diffusionllm/issues"
 diffusion-train = "scripts.train:main"
 diffusion-sample = "scripts.sample:main"
 diffusion-eval = "scripts.evaluate:main"
+diffusion-chat = "scripts.chat:main"
+diffusion-server = "scripts.server:main"
+diffusion-prepare-data = "scripts.prepare_data:main"
 
 [tool.setuptools.packages.find]
 include = ["diffusionllm*"]
