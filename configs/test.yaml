@@ -4,21 +4,21 @@
 # Diffusion process
 T: 100
 
-# Model architecture (small for testing)
-vocab_size: 1000
-hidden_dim: 128
-num_layers: 2
+# Model architecture (very small for CPU testing)
+vocab_size: 500
+hidden_dim: 64
+num_layers: 1
 num_heads: 4
 dropout: 0.0
-max_seq_len: 64
+max_seq_len: 32
 
 # Training hyperparameters
 lr: 0.001
 weight_decay: 0.01
-batch_size: 8
-seq_len: 32
-warmup_steps: 100
-max_steps: 1000
+batch_size: 4
+seq_len: 16
+warmup_steps: 50
+max_steps: 100
 
 # Optimization
 grad_clip: 1.0
@@ -27,7 +27,7 @@ beta2: 0.95
 
 # Logging & checkpointing
 log_every: 10
-save_every: 500
+save_every: 100
 checkpoint_dir: checkpoints_test
 log_dir: logs_test
 
@@ -40,7 +40,7 @@ eos_token_id: 2
 data_path: data/train.txt
 num_workers: 0
 
-# Mixed precision
+# Mixed precision (disabled for CPU)
 use_amp: false
 
 # Optional logging

@@ -140,45 +140,46 @@ def train_step(
     """Single training step."""
     model.train()
     batch_size = x0.shape[0]
-    
+    use_amp = device.type == 'cuda' and train_config.use_amp
+
     # Sample random timestep
     t = torch.randint(0, train_config.T, (batch_size,), device=device)
-    
+
     # Forward diffusion
     xt, mask = forward_diffusion(
-        x0, t, train_config.T, 
-        model_config.mask_token_id, 
+        x0, t, train_config.T,
+        model_config.mask_token_id,
         model_config.pad_token_id,
         alpha=alpha,
     )
-    
+
     # Forward pass with mixed precision
     optimizer.zero_grad()
-    
-    with autocast('cuda', enabled=train_config.use_amp):
+
+    with autocast('cuda', enabled=use_amp):
         logits = model(xt, t)
         loss = compute_loss(
             logits, x0, mask, t, train_config.T,
             model_config.pad_token_id,
             alpha=alpha,
         )
-    
+
     # Backward pass
     scaler.scale(loss).backward()
-    
+
     # Gradient clipping
     scaler.unscale_(optimizer)
     grad_norm = torch.nn.utils.clip_grad_norm_(
         model.parameters(), train_config.grad_clip
     )
-    
+
     # Optimizer step
     scaler.step(optimizer)
     scaler.update()
-    
+
     # Compute perplexity
     with torch.no_grad():
-        with autocast('cuda', enabled=train_config.use_amp):
+        with autocast('cuda', enabled=use_amp):
             if mask.sum() > 0:
                 logits_masked = logits[mask]
                 x0_masked = x0[mask]
@@ -186,25 +187,27 @@ def train_step(
                 perplexity = torch.exp(ce_loss)
             else:
                 perplexity = torch.tensor(float('inf'), device=device)
-    
+
     return loss, perplexity, grad_norm
 
 
-def main(args):
+def main(args, train_config=None, model_config=None):
     """Main training function."""
-    # Setup configuration
-    train_config = TrainConfig()
-    model_config = ModelConfig(
-        vocab_size=train_config.vocab_size,
-        hidden_dim=train_config.hidden_dim,
-        num_layers=train_config.num_layers,
-        num_heads=train_config.num_heads,
-        dropout=train_config.dropout,
-        max_seq_len=train_config.max_seq_len,
-        mask_token_id=train_config.mask_token_id,
-        pad_token_id=train_config.pad_token_id,
-        eos_token_id=train_config.eos_token_id,
-    )
+    # Setup configuration if not provided
+    if train_config is None:
+        train_config = TrainConfig()
+    if model_config is None:
+        model_config = ModelConfig(
+            vocab_size=train_config.vocab_size,
+            hidden_dim=train_config.hidden_dim,
+            num_layers=train_config.num_layers,
+            num_heads=train_config.num_heads,
+            dropout=train_config.dropout,
+            max_seq_len=train_config.max_seq_len,
+            mask_token_id=train_config.mask_token_id,
+            pad_token_id=train_config.pad_token_id,
+            eos_token_id=train_config.eos_token_id,
+        )
     
     # Override from config file if provided
     if args.config:
@@ -219,9 +222,23 @@ def main(args):
         except ImportError:
             print("omegaconf not installed, ignoring config file")
     
-    # Setup device
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f"Training on device: {device}")
+    # Setup device with CUDA compatibility check
+    device = torch.device('cpu')
+    use_cuda = False
+    if torch.cuda.is_available():
+        try:
+            # Test if CUDA is actually usable by running a computation
+            x = torch.zeros(1).cuda()
+            y = x + x  # This triggers kernel launch
+            y.item()   # Force synchronization
+            device = torch.device('cuda')
+            use_cuda = True
+            print("Training on device: cuda")
+        except Exception as e:
+            print(f"CUDA not usable ({type(e).__name__}), falling back to CPU")
+    
+    if not use_cuda:
+        device = torch.device('cpu')
     
     # Initialize model
     model = DiscreteDiffusionTransformer(model_config).to(device)
@@ -236,8 +253,9 @@ def main(args):
         weight_decay=train_config.weight_decay,
     )
     
-    # Gradient scaler for mixed precision
-    scaler = GradScaler('cuda', enabled=train_config.use_amp)
+    # Gradient scaler for mixed precision (only on CUDA)
+    use_scaler = device.type == 'cuda' and train_config.use_amp
+    scaler = GradScaler('cuda', enabled=use_scaler)
     
     # Get noise schedule
     alpha = get_noise_schedule(train_config.T)
@@ -359,13 +377,37 @@ if __name__ == "__main__":
         "--checkpoint-dir", type=str, default=None,
         help="Directory to save checkpoints"
     )
-    
+    parser.add_argument(
+        "--test", action="store_true",
+        help="Use test configuration (small model, 100 steps)"
+    )
+
     args = parser.parse_args()
+
+    # Create configuration
+    train_config = TrainConfig()
     
-    # Override config from command line
+    # Apply test configuration if requested
+    if args.test:
+        train_config.T = 100
+        train_config.vocab_size = 500
+        train_config.hidden_dim = 64
+        train_config.num_layers = 1
+        train_config.num_heads = 4
+        train_config.batch_size = 4
+        train_config.seq_len = 16
+        train_config.max_steps = 100
+        train_config.warmup_steps = 50
+        train_config.log_every = 10
+        train_config.save_every = 100
+        train_config.checkpoint_dir = "checkpoints_test"
+        train_config.use_amp = False
+        train_config.num_workers = 0
+    
+    # Apply command line overrides
     if args.data_path:
-        TrainConfig.data_path = args.data_path
+        train_config.data_path = args.data_path
     if args.checkpoint_dir:
-        TrainConfig.checkpoint_dir = args.checkpoint_dir
-    
-    main(args)
+        train_config.checkpoint_dir = args.checkpoint_dir
+
+    main(args, train_config=train_config)
