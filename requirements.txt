@@ -1,0 +1,18 @@
+# Core dependencies
+torch>=2.0.0
+
+# Optional: Configuration loading
+omegaconf>=2.3.0
+
+# Optional: Progress bars
+tqdm>=4.65.0
+
+# Optional: Experiment tracking
+wandb>=0.15.0
+
+# Optional: TensorBoard support
+tensorboard>=2.13.0
+
+# Development dependencies
+pytest>=7.4.0
+pytest-cov>=4.1.0

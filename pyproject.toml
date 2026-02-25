@@ -1,0 +1,104 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "diffusionllm"
+version = "0.1.0"
+description = "Discrete Diffusion Language Model (Mercury/MDLM style)"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+keywords = [
+    "diffusion",
+    "language-model",
+    "transformer",
+    "generative-model",
+    "pytorch",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "torch>=2.0.0",
+    "tqdm>=4.65.0",
+]
+
+[project.optional-dependencies]
+config = ["omegaconf>=2.3.0"]
+tracking = ["wandb>=0.15.0", "tensorboard>=2.13.0"]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+]
+all = [
+    "diffusionllm[config]",
+    "diffusionllm[tracking]",
+    "diffusionllm[dev]",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/diffusionllm"
+Repository = "https://github.com/yourusername/diffusionllm"
+Issues = "https://github.com/yourusername/diffusionllm/issues"
+
+[project.scripts]
+diffusion-train = "scripts.train:main"
+diffusion-sample = "scripts.sample:main"
+diffusion-eval = "scripts.evaluate:main"
+
+[tool.setuptools.packages.find]
+include = ["diffusionllm*"]
+
+[tool.setuptools.package-dir]
+"" = "."
+
+[tool.black]
+line-length = 100
+target-version = ["py39", "py310", "py311", "py312"]
+include = '\.pyi?$'
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+select = ["E", "F", "W", "I", "N", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "gpu: marks tests that require GPU",
+]
+
+[tool.coverage.run]
+source = ["diffusionllm"]
+omit = ["tests/*", "scripts/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]

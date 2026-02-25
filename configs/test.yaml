@@ -1,0 +1,48 @@
+# Small configuration for testing/debugging
+# Usage: python scripts/train.py --config configs/test.yaml
+
+# Diffusion process
+T: 100
+
+# Model architecture (small for testing)
+vocab_size: 1000
+hidden_dim: 128
+num_layers: 2
+num_heads: 4
+dropout: 0.0
+max_seq_len: 64
+
+# Training hyperparameters
+lr: 0.001
+weight_decay: 0.01
+batch_size: 8
+seq_len: 32
+warmup_steps: 100
+max_steps: 1000
+
+# Optimization
+grad_clip: 1.0
+beta1: 0.9
+beta2: 0.95
+
+# Logging & checkpointing
+log_every: 10
+save_every: 500
+checkpoint_dir: checkpoints_test
+log_dir: logs_test
+
+# Special tokens
+mask_token_id: 0
+pad_token_id: 1
+eos_token_id: 2
+
+# Data
+data_path: data/train.txt
+num_workers: 0
+
+# Mixed precision
+use_amp: false
+
+# Optional logging
+use_wandb: false
+use_tensorboard: false
