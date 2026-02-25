@@ -12,7 +12,7 @@ A production-ready PyTorch implementation of discrete diffusion for language mod
 - **Mixed Precision**: AMP support for faster training on GPU
 - **Experiment Tracking**: WandB and TensorBoard integration
 - **REST API**: FastAPI server for deployment
-- **Production Scripts**: Data preparation, training, sampling, chat, and serving
+- **Interactive CLI**: Menu-driven setup and execution
 
 ## Quick Start
 
@@ -20,39 +20,54 @@ A production-ready PyTorch implementation of discrete diffusion for language mod
 # Clone and setup
 git clone https://github.com/austintechreviews/DiffusionLLMThing.git
 cd DiffusionLLMThing
+
+# Interactive setup (recommended)
+./setup.sh -i
+
+# Or quick setup
 ./setup.sh --dev
+source venv/bin/activate
 
-# Prepare your data
-python scripts/prepare_data.py --input data/raw_text/ --output data/processed
+# Use the interactive run menu
+./run.sh
 
-# Train a model
-python scripts/train.py --data-dir data/processed --model-preset base
-
-# Generate text
-python scripts/sample.py --checkpoint checkpoints/checkpoint_final.pt --num-samples 5
-
-# Chat interactively
-python scripts/chat.py --checkpoint checkpoints/checkpoint_final.pt
-
-# Start API server
-python scripts/server.py --checkpoint checkpoints/checkpoint_final.pt --port 8000
+# Or run commands directly
+./run.sh train --test     # Quick test
+./run.sh prepare          # Prepare data
+./run.sh chat             # Interactive chat
+./run.sh server           # API server
 ```
 
 ## Installation
 
-### Using setup script (recommended)
+### Interactive Setup (Recommended)
 
 ```bash
-./setup.sh --all    # Install all dependencies
-source venv/bin/activate
+./setup.sh -i    # Interactive wizard with menus
 ```
 
-### Manual installation
+The wizard will guide you through:
+1. Python version selection
+2. Installation type (core/dev/full)
+3. Virtual environment location
+4. Confirmation and installation
+5. Optional test training
+
+### Quick Setup
+
+```bash
+./setup.sh --dev    # Development installation
+./setup.sh --all    # Full installation (includes wandb, fastapi)
+./setup.sh          # Core only
+```
+
+### Manual Installation
 
 ```bash
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
+pip install -e .
 ```
 
 ### Requirements
@@ -60,6 +75,64 @@ pip install -r requirements.txt
 - Python 3.9+
 - PyTorch 2.0+
 - CUDA 7.0+ GPU (recommended for training)
+
+## Interactive Run Menu
+
+The `./run.sh` script provides an interactive menu:
+
+```bash
+./run.sh
+```
+
+```
+========================================
+  Discrete Diffusion LM - Run Menu
+========================================
+
+Training:
+  1) Quick test (tiny model, 100 steps)
+  2) Train with preset (tiny/small/base)
+  3) Resume from checkpoint
+
+Generation:
+  4) Interactive chat
+  5) Batch sampling
+  6) Start API server
+
+Data:
+  7) Prepare data
+  8) Evaluate model
+
+System:
+  9) Check installation
+  10) Run tests
+  11) Python REPL
+
+  0) Exit
+```
+
+### Direct Commands
+
+```bash
+# Training
+./run.sh train --test           # Quick test (tiny, 100 steps)
+./run.sh train                  # Guided training setup
+./run.sh resume                 # Resume from checkpoint
+
+# Generation
+./run.sh chat                   # Interactive chat
+./run.sh sample                 # Batch sampling
+./run.sh server --port 8000     # API server
+
+# Data
+./run.sh prepare                # Prepare data
+./run.sh eval                   # Evaluate model
+
+# System
+./run.sh check                  # Check installation
+./run.sh test                   # Run test suite
+./run.sh python script.py       # Run Python script
+```
 
 ## Data Preparation
 
@@ -83,6 +156,10 @@ Supported formats:
 ### Prepare the data
 
 ```bash
+# Using run.sh (interactive)
+./run.sh prepare
+
+# Or directly
 python scripts/prepare_data.py \
     --input data/raw_text/ \
     --output data/processed \
@@ -108,9 +185,23 @@ data/processed/
 
 ## Training
 
-### Basic training
+### Quick Test
 
 ```bash
+./run.sh train --test
+# or
+python scripts/train.py --test
+```
+
+Runs a tiny model (~5M params) for 100 steps - completes in ~1 minute on CPU.
+
+### Full Training
+
+```bash
+# Using run.sh (guided)
+./run.sh train
+
+# Or directly
 python scripts/train.py \
     --data-dir data/processed \
     --model-preset base \
@@ -118,25 +209,25 @@ python scripts/train.py \
     --max-steps 100000
 ```
 
-### Model presets
+### Model Presets
 
-| Preset  | Params | Hidden | Layers | Heads | Max Len |
-|---------|--------|--------|--------|-------|---------|
-| tiny    | ~5M    | 128    | 2      | 4     | 256     |
-| small   | ~20M   | 256    | 4      | 8     | 512     |
-| base    | ~85M   | 512    | 6      | 8     | 512     |
-| medium  | ~200M  | 768    | 12     | 12    | 1024    |
-| large   | ~400M  | 1024   | 16     | 16    | 1024    |
-| xl      | ~1.5B  | 2048   | 24     | 16    | 2048    |
+| Preset  | Params | Hidden | Layers | Heads | Max Len | Use Case |
+|---------|--------|--------|--------|-------|---------|----------|
+| tiny    | ~5M    | 128    | 2      | 4     | 256     | Testing |
+| small   | ~20M   | 256    | 4      | 8     | 512     | Quick experiments |
+| base    | ~85M   | 512    | 6      | 8     | 512     | Standard |
+| medium  | ~200M  | 768    | 12     | 12    | 1024    | Production |
+| large   | ~400M  | 1024   | 16     | 16    | 1024    | High quality |
+| xl      | ~1.5B  | 2048   | 24     | 16    | 2048    | Best quality |
 
-### Advanced options
+### Advanced Training Options
 
 ```bash
 python scripts/train.py \
     --data-dir data/processed \
     --model-preset base \
     --batch-size 16 \
-    --grad-accum 4 \          # Effective batch: 16*4=64
+    --grad-accum 4 \              # Effective batch: 16*4=64
     --lr 3e-4 \
     --warmup-steps 2000 \
     --max-steps 100000 \
@@ -148,25 +239,38 @@ python scripts/train.py \
     --checkpoint-dir checkpoints/my_experiment
 ```
 
-### Resuming training
+### Resuming Training
 
 ```bash
-python scripts/train.py \
-    --data-dir data/processed \
-    --resume checkpoints/checkpoint_step_005000.pt
-```
-
-### Test mode
-
-```bash
-python scripts/train.py --test  # Tiny model, 100 steps
+./run.sh resume
+# or
+python scripts/train.py --resume checkpoints/checkpoint_step_005000.pt
 ```
 
 ## Generation
 
-### Sample generation
+### Interactive Chat
 
 ```bash
+./run.sh chat
+# or
+python scripts/chat.py --checkpoint checkpoints/checkpoint_final.pt
+```
+
+**Chat commands:**
+- `/quit` - Exit
+- `/help` - Show help
+- `/temp <0.1-2.0>` - Set temperature
+- `/len <32-512>` - Set max length
+- `/progress` - Toggle progress bar
+- `/model` - Show model info
+- `/clear` - Clear history
+
+### Batch Sampling
+
+```bash
+./run.sh sample
+# or
 python scripts/sample.py \
     --checkpoint checkpoints/checkpoint_final.pt \
     --num-samples 10 \
@@ -175,32 +279,18 @@ python scripts/sample.py \
     --output samples.txt
 ```
 
-### Interactive chat
-
-```bash
-python scripts/chat.py --checkpoint checkpoints/checkpoint_final.pt
-
-# In chat:
-/len 256        # Set max length
-/temp 0.7       # Set temperature
-/progress       # Toggle progress bar
-```
-
 ### API Server
 
 ```bash
-# Start server
+./run.sh server --port 8000
+# or
 python scripts/server.py \
     --checkpoint checkpoints/checkpoint_final.pt \
-    --port 8000
-
-# Query API
-curl -X POST http://localhost:8000/generate \
-    -H "Content-Type: application/json" \
-    -d '{"prompt": "Once upon a time", "max_length": 128, "temperature": 0.8}'
+    --port 8000 \
+    --host 0.0.0.0
 ```
 
-#### API Endpoints
+**Endpoints:**
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -209,7 +299,20 @@ curl -X POST http://localhost:8000/generate \
 | `/generate` | POST | Generate text |
 | `/load` | POST | Load checkpoint |
 
-#### Example API request
+**Example request:**
+
+```bash
+curl -X POST http://localhost:8000/generate \
+    -H "Content-Type: application/json" \
+    -d '{
+        "prompt": "Once upon a time",
+        "max_length": 128,
+        "temperature": 0.8,
+        "num_sequences": 3
+    }'
+```
+
+**Python client:**
 
 ```python
 import requests
@@ -227,9 +330,25 @@ response = requests.post(
 print(response.json()["generations"])
 ```
 
+## Evaluation
+
+```bash
+./run.sh eval
+# or
+python scripts/evaluate.py \
+    --checkpoint checkpoints/checkpoint_final.pt \
+    --data-path data/processed/test.jsonl \
+    --eval-timesteps
+```
+
+Outputs:
+- Validation loss
+- Perplexity
+- Performance at different noise levels
+
 ## Configuration
 
-### YAML config file
+### YAML Config File
 
 ```yaml
 # configs/my_config.yaml
@@ -242,6 +361,7 @@ warmup_steps: 2000
 T: 1000
 use_rotary_embeddings: true
 use_amp: true
+use_wandb: true
 ```
 
 ```bash
@@ -271,9 +391,10 @@ DiffusionLLMThing/
 │   ├── default.yaml
 │   └── test.yaml
 ├── tests/
-├── setup.sh
-├── run.sh
-└── requirements.txt
+├── setup.sh               # Interactive setup
+├── run.sh                 # Interactive runner
+├── requirements.txt
+└── README.md
 ```
 
 ## API Usage
@@ -288,15 +409,25 @@ from diffusionllm import (
     load_datasets,
 )
 
-# Load config and create model
+# Get model config from preset
 config = get_model_config("base")
+print(f"Parameters: {config.num_parameters_millions:.1f}M")
+
+# Create model
 model = DiscreteDiffusionTransformer(config)
 
-# Load tokenizer
+# Load tokenizer (if available)
 tokenizer = DiffusionTokenizer.load("data/processed/tokenizer.json")
 
 # Encode text
 ids = tokenizer.encode("Hello, world!", add_bos=True, add_eos=True)
+
+# Load datasets
+dataloaders = load_datasets(
+    "data/processed",
+    max_length=512,
+    batch_size=32,
+)
 
 # Generate
 generated = sample(
@@ -332,6 +463,35 @@ where `α_t = 1 - t/T`
 ### Sampling
 
 Iterative denoising from `t=T-1` to `t=0`, progressively unmasking tokens.
+
+## Troubleshooting
+
+### CUDA incompatible with GPU
+
+If your GPU isn't supported by the installed PyTorch CUDA version:
+```bash
+# The scripts will automatically fall back to CPU
+# For faster CPU training, use smaller models:
+./run.sh train --test  # Tiny model
+```
+
+### Out of memory
+
+Reduce batch size or use gradient accumulation:
+```bash
+python scripts/train.py \
+    --batch-size 8 \
+    --grad-accum 4  # Effective batch: 32
+```
+
+### Missing optional dependencies
+
+The package works without optional dependencies. Install as needed:
+```bash
+pip install tokenizers      # For BPE tokenization
+pip install fastapi uvicorn # For API server
+pip install wandb           # For experiment tracking
+```
 
 ## License
 
