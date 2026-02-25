@@ -79,7 +79,7 @@ def generate_response(
         def callback(step, total):
             nonlocal pbar
             if pbar is None:
-                pbar = tqdm(total=total, desc="Generating", leave=False)
+                pbar = tqdm(total=total, desc="Generating", leave=False, file=sys.stdout)
             pbar.update(1)
         progress_callback = callback
     
@@ -109,6 +109,8 @@ def print_banner():
     print("\n" + "=" * 60)
     print("  Discrete Diffusion Language Model - Interactive Chat")
     print("=" * 60)
+    print("\nNote: This model uses character-level encoding for demo.")
+    print("      For best results, use a model trained on real text data.")
     print("\nCommands:")
     print("  /quit, /exit, /q  - Exit the chat")
     print("  /help, /h         - Show this help message")
@@ -116,6 +118,9 @@ def print_banner():
     print("  /len <value>      - Set max response length (32-512)")
     print("  /progress         - Toggle generation progress bar")
     print("\n" + "-" * 60)
+    print("\nTip: Generation runs synchronously. Use shorter lengths for")
+    print("     faster responses, or train on real data for better quality.")
+    print("-" * 60)
 
 
 def print_help():
