@@ -262,7 +262,7 @@ def main(args):
     """Main training function."""
     # Load configuration
     train_config = TrainConfig()
-    
+
     # Apply preset
     if args.model_preset:
         model_config = get_model_config(
@@ -279,7 +279,7 @@ def main(args):
             max_seq_len=train_config.max_seq_len,
             use_rotary_embeddings=train_config.use_rotary_embeddings,
         )
-    
+
     # Override from config file
     if args.config:
         try:
@@ -288,9 +288,11 @@ def main(args):
             for key, value in asdict(conf).items():
                 if hasattr(train_config, key):
                     setattr(train_config, key, value)
+                if hasattr(model_config, key):
+                    setattr(model_config, key, value)
         except ImportError:
             print("omegaconf not installed, ignoring config file")
-    
+
     # Override from command line
     if args.data_dir:
         train_config.data_dir = args.data_dir
@@ -302,10 +304,10 @@ def main(args):
         train_config.batch_size = args.batch_size
     if args.lr:
         train_config.lr = args.lr
-    
+
     # Set seed
     set_seed(train_config.seed)
-    
+
     # Setup device
     device = torch.device('cpu')
     use_cuda = False
@@ -322,6 +324,20 @@ def main(args):
     if not use_cuda:
         device = torch.device('cpu')
         train_config.use_amp = False  # Disable AMP on CPU
+    
+    # Adjust model max_seq_len based on data BEFORE creating model
+    if train_config.data_dir:
+        metadata_path = os.path.join(train_config.data_dir, "metadata.json")
+        if os.path.exists(metadata_path):
+            import json
+            with open(metadata_path) as f:
+                metadata = json.load(f)
+            data_max_len = metadata.get('max_seq_len', 0)
+            if data_max_len > 0 and data_max_len < model_config.max_seq_len:
+                # Add small buffer for BOS/EOS
+                new_max_len = min(data_max_len + 4, model_config.max_seq_len)
+                print(f"Adjusting model max_seq_len from {model_config.max_seq_len} to {new_max_len} (data max: {data_max_len})")
+                model_config.max_seq_len = new_max_len
     
     # Print model summary
     print_model_summary(model_config)
@@ -340,7 +356,7 @@ def main(args):
     else:
         print(f"Tokenizer not found at {tokenizer_path}, using default special tokens")
         tokenizer = None
-    
+
     # Initialize model
     model = DiscreteDiffusionTransformer(model_config).to(device)
     num_params = count_parameters(model)

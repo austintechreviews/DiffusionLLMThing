@@ -169,13 +169,17 @@ def prepare_data(
     print(f"\n{'='*60}")
     print("Tokenizing datasets...")
     
+    max_seq_len = 0
+
     def tokenize_and_save(text: str, output_file: Path, description: str):
+        nonlocal max_seq_len
         lines = text.split("\n")
         with open(output_file, "w", encoding="utf-8") as f:
             for i, line in enumerate(lines):
                 if not line.strip():
                     continue
                 token_ids = tokenizer.encode(line, add_bos=True, add_eos=True)
+                max_seq_len = max(max_seq_len, len(token_ids))
                 record = {
                     "text": line,
                     "token_ids": token_ids,
@@ -201,9 +205,10 @@ def prepare_data(
         "train_chars": len(train_text),
         "val_chars": len(val_text),
         "test_chars": len(test_text),
+        "max_seq_len": max_seq_len,
         "min_frequency": min_frequency,
     }
-    
+
     metadata_path = output_path / "metadata.json"
     with open(metadata_path, "w") as f:
         json.dump(metadata, f, indent=2)

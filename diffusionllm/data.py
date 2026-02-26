@@ -239,22 +239,33 @@ def load_datasets(
 ) -> Dict[str, DataLoader]:
     """
     Load train, validation, and test datasets.
-    
+
     Args:
         data_dir: Directory containing train.jsonl, val.jsonl, test.jsonl
         max_length: Maximum sequence length
         batch_size: Batch size
         num_workers: Number of workers per dataset
         cache_in_memory: Cache data in memory
-    
+
     Returns:
         Dictionary with 'train', 'val', 'test' DataLoaders
     """
     data_path = Path(data_dir)
     
+    # Try to load metadata for actual max_seq_len
+    metadata_path = data_path / "metadata.json"
+    if metadata_path.exists():
+        import json
+        with open(metadata_path) as f:
+            metadata = json.load(f)
+        data_max_len = metadata.get('max_seq_len', 0)
+        if data_max_len > 0:
+            # Use smaller of provided max_length and data max (with small buffer)
+            max_length = min(max_length, data_max_len + 4)
+
     datasets = {}
     splits = ["train", "val", "test"]
-    
+
     for split in splits:
         split_path = data_path / f"{split}.jsonl"
         if split_path.exists():
