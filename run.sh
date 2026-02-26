@@ -215,20 +215,22 @@ run_train() {
     
     # Select preset
     echo "Select model preset:"
-    echo "  1) tiny   (~5M params, for testing)"
-    echo "  2) small  (~20M params, quick experiments)"
-    echo "  3) base   (~85M params, standard)"
-    echo "  4) custom"
+    echo "  1) micro  (~1M params, very small datasets)"
+    echo "  2) tiny   (~3M params, for testing)"
+    echo "  3) small  (~20M params, quick experiments)"
+    echo "  4) base   (~85M params, standard)"
+    echo "  5) custom"
     echo ""
-    read -p "Choice [1-4] (default: 1): " preset_choice
+    read -p "Choice [1-5] (default: 2): " preset_choice
     
-    case ${preset_choice:-1} in
-        2) PRESET="small" ;;
-        3) PRESET="base" ;;
-        4)
-            read -p "Enter preset (tiny/small/base/medium/large/xl): " PRESET
+    case ${preset_choice:-2} in
+        2) PRESET="tiny" ;;
+        3) PRESET="small" ;;
+        4) PRESET="base" ;;
+        5)
+            read -p "Enter preset (micro/tiny/small/base/medium/large/xl): " PRESET
             ;;
-        *) PRESET="tiny" ;;
+        *) PRESET="micro" ;;
     esac
     
     echo ""

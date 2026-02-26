@@ -51,14 +51,14 @@ DATASETS = {
     
     # Medium datasets
     "wikitext-2": {
-        "url": "https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-2-raw-v1.zip",
+        "url": "https://huggingface.co/datasets/Salesforce/wikitext/resolve/main/wikitext-2-raw-v1.zip?download=true",
         "filename": "wikitext-2-raw.zip",
         "extract": True,
         "description": "WikiText-2 (2MB) - Wikipedia articles",
         "size": "~2MB",
     },
     "wikitext-103": {
-        "url": "https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-103-raw-v1.zip",
+        "url": "https://huggingface.co/datasets/Salesforce/wikitext/resolve/main/wikitext-103-raw-v1.zip?download=true",
         "filename": "wikitext-103-raw.zip",
         "extract": True,
         "description": "WikiText-103 (600MB) - Larger Wikipedia corpus",
@@ -82,21 +82,29 @@ DATASETS = {
     },
     
     # Books and literature
-    "gutenberg-small": {
-        "url": "https://huggingface.co/datasets/manu/gutenberg_books/resolve/main/data/train-00000-of-00001-e85369981f1ae09e.parquet?download=true",
-        "filename": "gutenberg.parquet",
-        "description": "Gutenberg Books (sample) - Requires parquet support",
-        "size": "~50MB",
+    "pg19-sample": {
+        "url": "https://huggingface.co/datasets/deepmind/pg19/resolve/main/data/train-00000-of-00001.parquet?download=true",
+        "filename": "pg19_sample.parquet",
+        "description": "Project Gutenberg books sample (requires parquet)",
+        "size": "~100MB",
         "note": "Requires: pip install pandas pyarrow",
     },
     
     # Code datasets
-    "python-code": {
-        "url": "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt",  # Placeholder
-        "filename": "python_code.txt",
-        "description": "Python code corpus (placeholder)",
-        "size": "Variable",
-        "note": "Clone from https://github.com/TheAlgorithms/Python for actual code",
+    "python-algo": {
+        "url": "https://raw.githubusercontent.com/TheAlgorithms/Python/master/README.md",
+        "filename": "python_algos.txt",
+        "description": "Python Algorithms (sample from TheAlgorithms/Python)",
+        "size": "~10MB",
+        "note": "Full repo: git clone https://github.com/TheAlgorithms/Python",
+    },
+    
+    # News/Articles
+    "ag-news": {
+        "url": "https://raw.githubusercontent.com/mhjabreel/CharCnn_Keras/master/data/ag_news_csv/train.csv",
+        "filename": "ag_news.csv",
+        "description": "AG News headlines (sample)",
+        "size": "~10MB",
     },
 }
 

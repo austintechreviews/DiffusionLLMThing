@@ -79,10 +79,19 @@ def prepare_data(
     train_split: float = 0.9,
     val_split: float = 0.05,
     test_split: float = 0.05,
+    seq_len: int = 512,
     overwrite: bool = False,
 ):
     """
-    Prepare data for training.
+    Prepare data for training with text packing.
+    
+    Text packing:
+    1. Tokenize entire corpus
+    2. Concatenate all tokens
+    3. Chunk into fixed-length sequences (seq_len)
+    
+    This ensures all training samples are exactly seq_len tokens,
+    maximizing training efficiency.
     
     Args:
         input_path: Input file or directory
@@ -92,6 +101,7 @@ def prepare_data(
         train_split: Training set proportion
         val_split: Validation set proportion
         test_split: Test set proportion
+        seq_len: Fixed sequence length for training
         overwrite: Overwrite existing files
     """
     output_path = Path(output_dir)
@@ -164,48 +174,69 @@ def prepare_data(
     
     print(f"Tokenizer saved to {tokenizer_path}")
     print(f"Vocabulary size: {tokenizer.actual_vocab_size}")
-    
-    # Tokenize datasets
-    print(f"\n{'='*60}")
-    print("Tokenizing datasets...")
-    
-    max_seq_len = 0
 
-    def tokenize_and_save(text: str, output_file: Path, description: str):
-        nonlocal max_seq_len
-        lines = text.split("\n")
+    # Tokenize and pack text into fixed-length sequences
+    print(f"\n{'='*60}")
+    print(f"Packing text into {seq_len}-token sequences...")
+
+    def tokenize_and_pack(text: str) -> list:
+        """Tokenize text and pack into fixed-length sequences."""
+        # Tokenize entire text
+        all_tokens = tokenizer.encode(text, add_bos=True, add_eos=False)
+        
+        # Chunk into fixed-length sequences
+        sequences = []
+        for i in range(0, len(all_tokens) - seq_len + 1, seq_len):
+            seq = all_tokens[i:i + seq_len]
+            if len(seq) == seq_len:
+                sequences.append(seq)
+        
+        return sequences
+
+    # Process each split
+    print("Tokenizing train split...")
+    train_sequences = tokenize_and_pack(train_text)
+    print(f"  Train: {len(train_sequences):,} sequences ({len(train_sequences) * seq_len:,} tokens)")
+
+    print("Tokenizing val split...")
+    val_sequences = tokenize_and_pack(val_text)
+    print(f"  Val: {len(val_sequences):,} sequences ({len(val_sequences) * seq_len:,} tokens)")
+
+    print("Tokenizing test split...")
+    test_sequences = tokenize_and_pack(test_text)
+    print(f"  Test: {len(test_sequences):,} sequences ({len(test_sequences) * seq_len:,} tokens)")
+
+    # Save sequences
+    def save_sequences(sequences: list, output_file: Path, tokenizer_obj, description: str):
         with open(output_file, "w", encoding="utf-8") as f:
-            for i, line in enumerate(lines):
-                if not line.strip():
-                    continue
-                token_ids = tokenizer.encode(line, add_bos=True, add_eos=True)
-                max_seq_len = max(max_seq_len, len(token_ids))
+            for i, seq in enumerate(sequences):
+                text = tokenizer_obj.decode(seq, skip_special_tokens=False)
                 record = {
-                    "text": line,
-                    "token_ids": token_ids,
-                    "length": len(token_ids),
+                    "token_ids": seq,
+                    "length": len(seq),
+                    "text": text[:100] + "..." if len(text) > 100 else text,  # Truncate for storage
                 }
                 f.write(json.dumps(record) + "\n")
-                
-                if (i + 1) % 10000 == 0:
-                    print(f"  {description}: {i+1:,} lines processed")
-        
-        print(f"  {description}: Saved {len(lines):,} lines to {output_file}")
-    
-    tokenize_and_save(train_text, train_path, "Train")
-    tokenize_and_save(val_text, val_path, "Val")
-    tokenize_and_save(test_text, test_path, "Test")
+        print(f"  {description}: Saved {len(sequences):,} sequences to {output_file}")
+
+    save_sequences(train_sequences, train_path, tokenizer, "Train")
+    save_sequences(val_sequences, val_path, tokenizer, "Val")
+    save_sequences(test_sequences, test_path, tokenizer, "Test")
     
     # Save metadata
     metadata = {
         "vocab_size": tokenizer.actual_vocab_size,
-        "train_lines": len(train_lines),
-        "val_lines": len(val_lines),
-        "test_lines": len(test_lines),
+        "seq_len": seq_len,
+        "max_seq_len": seq_len,  # All sequences are exactly seq_len
+        "train_sequences": len(train_sequences),
+        "val_sequences": len(val_sequences),
+        "test_sequences": len(test_sequences),
+        "train_tokens": len(train_sequences) * seq_len,
+        "val_tokens": len(val_sequences) * seq_len,
+        "test_tokens": len(test_sequences) * seq_len,
         "train_chars": len(train_text),
         "val_chars": len(val_text),
         "test_chars": len(test_text),
-        "max_seq_len": max_seq_len,
         "min_frequency": min_frequency,
     }
 
@@ -272,6 +303,12 @@ def main():
         "--overwrite",
         action="store_true",
         help="Overwrite existing processed data"
+    )
+    parser.add_argument(
+        "--seq-len",
+        type=int,
+        default=512,
+        help="Sequence length for training (default: 512). Text will be packed to this length."
     )
     
     args = parser.parse_args()

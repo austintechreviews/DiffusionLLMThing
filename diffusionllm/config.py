@@ -63,16 +63,28 @@ class ModelConfig:
 
 # Predefined model configurations
 MODEL_PRESETS = {
+    # Micro model for very small datasets/testing
+    "micro": ModelConfig(
+        vocab_size=8192,
+        hidden_dim=64,
+        num_layers=2,
+        num_heads=4,
+        max_seq_len=256,
+        dropout=0.0,
+        use_rotary_embeddings=True,
+    ),
+    
     # Tiny model for testing/debugging
     "tiny": ModelConfig(
         vocab_size=8192,
         hidden_dim=128,
         num_layers=2,
         num_heads=4,
-        max_seq_len=256,
+        max_seq_len=512,
         dropout=0.0,
+        use_rotary_embeddings=True,  # Enabled by default
     ),
-    
+
     # Small model for quick experiments
     "small": ModelConfig(
         vocab_size=16384,
@@ -81,8 +93,9 @@ MODEL_PRESETS = {
         num_heads=8,
         max_seq_len=512,
         dropout=0.1,
+        use_rotary_embeddings=True,
     ),
-    
+
     # Base model (default)
     "base": ModelConfig(
         vocab_size=32000,
@@ -91,8 +104,9 @@ MODEL_PRESETS = {
         num_heads=8,
         max_seq_len=512,
         dropout=0.1,
+        use_rotary_embeddings=True,
     ),
-    
+
     # Medium model
     "medium": ModelConfig(
         vocab_size=32000,
@@ -101,8 +115,9 @@ MODEL_PRESETS = {
         num_heads=12,
         max_seq_len=1024,
         dropout=0.1,
+        use_rotary_embeddings=True,
     ),
-    
+
     # Large model
     "large": ModelConfig(
         vocab_size=32000,
@@ -111,8 +126,9 @@ MODEL_PRESETS = {
         num_heads=16,
         max_seq_len=1024,
         dropout=0.1,
+        use_rotary_embeddings=True,
     ),
-    
+
     # XL model
     "xl": ModelConfig(
         vocab_size=32000,
@@ -122,6 +138,7 @@ MODEL_PRESETS = {
         dim_feedforward=8192,
         max_seq_len=2048,
         dropout=0.1,
+        use_rotary_embeddings=True,
     ),
 }
 
