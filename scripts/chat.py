@@ -61,6 +61,9 @@ def generate_response(
     show_progress: bool = False,
 ) -> str:
     """Generate a response given a prompt."""
+    # Use model's actual max_seq_len
+    max_length = min(max_length, model_config.max_seq_len)
+    
     # Convert prompt to tokens (simple encoding for now)
     # In production, use the same tokenizer as training
     prompt_tokens = [min(ord(c) % (model_config.vocab_size - 3) + 3, model_config.vocab_size - 1) 
