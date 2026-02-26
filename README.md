@@ -28,14 +28,17 @@ cd DiffusionLLMThing
 ./setup.sh --dev
 source venv/bin/activate
 
-# Use the interactive run menu
-./run.sh
+# Download a dataset
+python scripts/download_data.py --dataset shakespeare --output data/raw/shakespeare
 
-# Or run commands directly
-./run.sh train --test     # Quick test
-./run.sh prepare          # Prepare data
-./run.sh chat             # Interactive chat
-./run.sh server           # API server
+# Prepare the data
+python scripts/prepare_data.py --input data/raw/shakespeare --output data/processed
+
+# Train a model
+python scripts/train.py --data-dir data/processed --model-preset tiny
+
+# Or use the interactive menu
+./run.sh
 ```
 
 ## Installation
@@ -135,6 +138,37 @@ System:
 ```
 
 ## Data Preparation
+
+### Download Datasets
+
+Quickly get started with pre-packaged datasets:
+
+```bash
+# List available datasets
+python scripts/download_data.py --list
+
+# Download Tiny Shakespeare (1MB, good for testing)
+python scripts/download_data.py --dataset shakespeare --output data/raw/shakespeare
+
+# Download WikiText-2 (2MB, Wikipedia articles)
+python scripts/download_data.py --dataset wikitext-2 --output data/raw/wikitext2
+
+# Download enwik8 (100MB, Wikipedia XML dump)
+python scripts/download_data.py --dataset enwik8 --output data/raw/enwik8
+
+# Download from custom URL
+python scripts/download_data.py --url https://example.com/data.txt --output data/raw/custom
+```
+
+**Available datasets:**
+
+| Dataset | Size | Description |
+|---------|------|-------------|
+| shakespeare | ~1MB | Tiny Shakespeare - character-level text |
+| wikitext-2 | ~2MB | Wikipedia articles |
+| wikitext-103 | ~600MB | Larger Wikipedia corpus |
+| enwik8 | ~100MB | First 100MB of Wikipedia XML |
+| enwik9 | ~1GB | First 1GB of Wikipedia XML |
 
 ### Format your data
 
