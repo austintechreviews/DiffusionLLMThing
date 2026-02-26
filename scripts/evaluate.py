@@ -194,9 +194,9 @@ def main(args):
     # Load checkpoint
     print(f"Loading checkpoint: {args.checkpoint}")
     checkpoint = torch.load(args.checkpoint, map_location=device, weights_only=False)
-    
+
     config = checkpoint.get('config', {})
-    
+
     model_config = ModelConfig(
         vocab_size=config.get('vocab_size', 32000),
         hidden_dim=config.get('hidden_dim', 512),
@@ -207,13 +207,15 @@ def main(args):
         mask_token_id=config.get('mask_token_id', 0),
         pad_token_id=config.get('pad_token_id', 1),
         eos_token_id=config.get('eos_token_id', 2),
+        use_rotary_embeddings=config.get('use_rotary_embeddings', False),  # Read from checkpoint
     )
-    
+
     T = config.get('T', 1000)
-    
+
     # Initialize model
     model = DiscreteDiffusionTransformer(model_config).to(device)
-    model.load_state_dict(checkpoint['model_state_dict'])
+    # Load with strict=False to handle rotary embedding buffers
+    model.load_state_dict(checkpoint['model_state_dict'], strict=False)
     model.eval()
     
     print(f"Model loaded (step {checkpoint.get('step', 'unknown')})")

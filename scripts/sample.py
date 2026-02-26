@@ -24,10 +24,10 @@ from diffusionllm.sampling import sample, tokens_to_text
 def load_model(checkpoint_path: str, device: torch.device):
     """Load model from checkpoint."""
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
-    
+
     # Reconstruct config from checkpoint
     config = checkpoint.get('config', {})
-    
+
     model_config = ModelConfig(
         vocab_size=config.get('vocab_size', 32000),
         hidden_dim=config.get('hidden_dim', 512),
@@ -38,20 +38,22 @@ def load_model(checkpoint_path: str, device: torch.device):
         mask_token_id=config.get('mask_token_id', 0),
         pad_token_id=config.get('pad_token_id', 1),
         eos_token_id=config.get('eos_token_id', 2),
+        use_rotary_embeddings=config.get('use_rotary_embeddings', False),  # Read from checkpoint
     )
-    
+
     model = DiscreteDiffusionTransformer(model_config).to(device)
-    model.load_state_dict(checkpoint['model_state_dict'])
+    # Load with strict=False to handle rotary embedding buffers
+    model.load_state_dict(checkpoint['model_state_dict'], strict=False)
     model.eval()
-    
+
     T = config.get('T', 1000)
-    
+
     print(f"Loaded model from step {checkpoint.get('step', 'unknown')}")
     print(f"  Vocab size: {model_config.vocab_size}")
     print(f"  Hidden dim: {model_config.hidden_dim}")
     print(f"  Num layers: {model_config.num_layers}")
     print(f"  Diffusion steps: {T}")
-    
+
     return model, model_config, T
 
 

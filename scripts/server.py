@@ -124,11 +124,13 @@ def load_model(checkpoint_path: str, device: torch.device):
         hidden_dim=config.get('hidden_dim', 512),
         num_layers=config.get('num_layers', 6),
         num_heads=config.get('num_heads', 8),
+        use_rotary_embeddings=config.get('use_rotary_embeddings', False),  # Read from checkpoint
     )
-    
+
     # Create and load model
     model = DiscreteDiffusionTransformer(model_config).to(device)
-    model.load_state_dict(checkpoint['model_state_dict'])
+    # Load with strict=False to handle rotary embedding buffers
+    model.load_state_dict(checkpoint['model_state_dict'], strict=False)
     model.eval()
     
     T = config.get('T', 1000)

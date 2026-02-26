@@ -51,18 +51,20 @@ DATASETS = {
     
     # Medium datasets
     "wikitext-2": {
-        "url": "https://huggingface.co/datasets/Salesforce/wikitext/resolve/main/wikitext-2-raw-v1.zip?download=true",
+        "url": "https://raw.githubusercontent.com/datasets/wikitext/master/wikitext-2-raw.zip",
         "filename": "wikitext-2-raw.zip",
         "extract": True,
         "description": "WikiText-2 (2MB) - Wikipedia articles",
         "size": "~2MB",
+        "note": "Alternative: pip install datasets; from datasets import load_dataset; ds = load_dataset('wikitext', 'wikitext-2-raw-v1')",
     },
     "wikitext-103": {
-        "url": "https://huggingface.co/datasets/Salesforce/wikitext/resolve/main/wikitext-103-raw-v1.zip?download=true",
+        "url": "https://raw.githubusercontent.com/datasets/wikitext/master/wikitext-103-raw.zip",
         "filename": "wikitext-103-raw.zip",
         "extract": True,
         "description": "WikiText-103 (600MB) - Larger Wikipedia corpus",
         "size": "~600MB",
+        "note": "Alternative: pip install datasets; from datasets import load_dataset; ds = load_dataset('wikitext', 'wikitext-103-raw-v1')",
     },
     
     # Large datasets
