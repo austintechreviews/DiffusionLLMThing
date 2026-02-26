@@ -506,13 +506,35 @@ def main(args):
                     train_config.checkpoint_dir,
                     f"checkpoint_step_{step:06d}.pt"
                 )
-                save_checkpoint(step, model, optimizer, scaler, asdict(train_config), checkpoint_path)
-            
+                # Merge model_config into train_config for checkpoint
+                ckpt_config = asdict(train_config)
+                ckpt_config.update({
+                    'vocab_size': model_config.vocab_size,
+                    'hidden_dim': model_config.hidden_dim,
+                    'num_layers': model_config.num_layers,
+                    'num_heads': model_config.num_heads,
+                    'max_seq_len': model_config.max_seq_len,
+                    'dropout': model_config.dropout,
+                    'use_rotary_embeddings': model_config.use_rotary_embeddings,
+                })
+                save_checkpoint(step, model, optimizer, scaler, ckpt_config, checkpoint_path)
+
             step += 1
-    
+
     # Save final checkpoint
     final_path = os.path.join(train_config.checkpoint_dir, "checkpoint_final.pt")
-    save_checkpoint(step - 1, model, optimizer, scaler, asdict(train_config), final_path)
+    # Merge model_config into train_config for checkpoint
+    ckpt_config = asdict(train_config)
+    ckpt_config.update({
+        'vocab_size': model_config.vocab_size,
+        'hidden_dim': model_config.hidden_dim,
+        'num_layers': model_config.num_layers,
+        'num_heads': model_config.num_heads,
+        'max_seq_len': model_config.max_seq_len,
+        'dropout': model_config.dropout,
+        'use_rotary_embeddings': model_config.use_rotary_embeddings,
+    })
+    save_checkpoint(step - 1, model, optimizer, scaler, ckpt_config, final_path)
     
     logger.close()
     print("\nTraining complete!")
