@@ -123,17 +123,14 @@ def apply_rotary_pos_emb(
     sin: torch.Tensor,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Apply rotary position embeddings to queries and keys."""
-    # Expand cos/sin to match q/k shape
-    if q.dim() == 4:  # (batch, heads, seq_len, dim)
-        cos = cos.unsqueeze(1)  # (1, 1, seq_len, dim/2)
-        sin = sin.unsqueeze(1)
+    # cos/sin shape: (seq_len, dim/2)
+    # q/k shape: (batch, heads, seq_len, dim)
     
-    cos = cos.unsqueeze(-1)  # (..., seq_len, dim/2, 1)
-    sin = sin.unsqueeze(-1)
-    
-    # Duplicate cos/sin for the two halves
-    cos = torch.cat([cos, cos], dim=-1).flatten(-2)
-    sin = torch.cat([sin, sin], dim=-1).flatten(-2)
+    # Reshape cos/sin for broadcasting: (1, 1, seq_len, dim/2) -> (1, 1, seq_len, dim)
+    cos = cos.unsqueeze(0).unsqueeze(0)  # (1, 1, seq_len, dim/2)
+    sin = sin.unsqueeze(0).unsqueeze(0)
+    cos = torch.cat([cos, cos], dim=-1)  # (1, 1, seq_len, dim)
+    sin = torch.cat([sin, sin], dim=-1)
     
     q_rot = (q * cos) + (rotate_half(q) * sin)
     k_rot = (k * cos) + (rotate_half(k) * sin)
